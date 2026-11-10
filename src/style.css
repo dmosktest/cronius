@@ -13,6 +13,9 @@
   --radius: 6px;
   --font: "IBM Plex Sans", "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", "Consolas", monospace;
+  --scroll-thumb: #6a4a34;
+  --scroll-thumb-hover: #8a6244;
+  --scroll-size: 10px;
 }
 
 *,
@@ -25,6 +28,43 @@ html,
 body {
   margin: 0;
   min-height: 100%;
+}
+
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) var(--bg);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: var(--scroll-size);
+  height: var(--scroll-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 2px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #7a5638, #5a3c28);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #9a6a44, #6a4630);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 body {
@@ -188,8 +228,6 @@ a {
   border-radius: 10px;
   background: var(--bg-elevated);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-  scrollbar-width: thin;
-  scrollbar-color: #6a4a34 transparent;
 }
 
 .lang-option {
@@ -405,10 +443,62 @@ h1 {
   line-height: 1.45;
 }
 
+.expr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-bottom: 0.65rem;
+}
+
+.expr-head .panel-title {
+  margin: 0;
+}
+
+.dialect {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.dialect-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-right: 0.15rem;
+}
+
+.dialect-btn {
+  min-height: 2rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.dialect-btn:hover {
+  border-color: var(--accent);
+}
+
+.dialect-btn.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
 .builder {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+.builder.is-quartz {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
 .cron-field {
@@ -472,6 +562,7 @@ h1 {
 .table-wrap {
   width: 100%;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 
 .runs {
@@ -754,6 +845,7 @@ h1 {
 .yaml-snippet.is-scroll {
   max-height: 16rem;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 @media (max-width: 860px) {

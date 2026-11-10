@@ -1,6 +1,34 @@
-export type FieldKind = "minute" | "hour" | "dom" | "month" | "dow";
+export type CronDialect = "classic" | "quartz";
+
+export type FieldKind =
+  | "second"
+  | "minute"
+  | "hour"
+  | "dom"
+  | "month"
+  | "dow"
+  | "year";
 
 export const FIELD_KINDS: readonly FieldKind[] = [
+  "minute",
+  "hour",
+  "dom",
+  "month",
+  "dow",
+];
+
+export const QUARTZ_FIELD_KINDS: readonly FieldKind[] = [
+  "second",
+  "minute",
+  "hour",
+  "dom",
+  "month",
+  "dow",
+  "year",
+];
+
+export const QUARTZ_CORE_KINDS: readonly FieldKind[] = [
+  "second",
   "minute",
   "hour",
   "dom",
@@ -14,7 +42,8 @@ export type CronErrorCode =
   | "syntax"
   | "range"
   | "reboot"
-  | "macro";
+  | "macro"
+  | "quartzDay";
 
 export type FieldItem = {
   from: number;
@@ -31,11 +60,16 @@ export type ParsedField = {
   items: FieldItem[];
   values: number[];
   lastDay?: boolean;
+  unspecified?: boolean;
+  nearestWeekday?: number;
+  lastDow?: number;
+  nthDow?: { weekday: number; n: number };
 };
 
 export type ParsedCron = {
   ok: true;
   expr: string;
+  dialect: CronDialect;
   macro?: string;
   fields: ParsedField[];
   dayMode: "and" | "or";
@@ -51,12 +85,18 @@ export type CronError = {
 
 export type CronParseResult = ParsedCron | CronError;
 
+export type ParseOptions = {
+  dialect?: CronDialect;
+};
+
 export const FIELD_LIMITS: Record<FieldKind, { min: number; max: number }> = {
+  second: { min: 0, max: 59 },
   minute: { min: 0, max: 59 },
   hour: { min: 0, max: 23 },
   dom: { min: 1, max: 31 },
   month: { min: 1, max: 12 },
   dow: { min: 0, max: 7 },
+  year: { min: 1970, max: 2099 },
 };
 
 const MONTH_NAMES = [
@@ -88,8 +128,19 @@ const MACROS: Record<string, string> = {
 
 const ITEM_RE = /^(\*|([0-9A-Za-z]+)(?:-([0-9A-Za-z]+))?)(?:\/(\d+))?$/;
 
-function resolveToken(kind: FieldKind, token: string): number | null {
-  if (/^\d+$/.test(token)) return Number(token);
+function resolveToken(
+  kind: FieldKind,
+  token: string,
+  dialect: CronDialect,
+): number | null {
+  if (/^\d+$/.test(token)) {
+    const n = Number(token);
+    if (kind === "dow" && dialect === "quartz") {
+      if (n < 1 || n > 7) return null;
+      return n - 1;
+    }
+    return n;
+  }
   const upper = token.toUpperCase();
   if (kind === "month") {
     const idx = MONTH_NAMES.indexOf(upper);
@@ -102,20 +153,66 @@ function resolveToken(kind: FieldKind, token: string): number | null {
   return null;
 }
 
-function parseField(kind: FieldKind, raw: string): ParsedField | CronError {
-  if (kind === "dom" && raw.toUpperCase() === "L") {
-    return {
-      kind,
-      raw: "L",
-      star: false,
-      any: false,
-      items: [],
-      values: [],
-      lastDay: true,
-    };
+function emptySpecial(
+  kind: FieldKind,
+  raw: string,
+  extra: Partial<ParsedField>,
+): ParsedField {
+  return {
+    kind,
+    raw,
+    star: false,
+    any: false,
+    items: [],
+    values: [],
+    ...extra,
+  };
+}
+
+function parseField(
+  kind: FieldKind,
+  raw: string,
+  dialect: CronDialect,
+): ParsedField | CronError {
+  const upper = raw.toUpperCase();
+  if (upper === "?") {
+    if (dialect !== "quartz" || (kind !== "dom" && kind !== "dow")) {
+      return { ok: false, errorCode: "syntax", field: kind };
+    }
+    return emptySpecial(kind, "?", { unspecified: true, any: true });
+  }
+  if (kind === "dom" && upper === "L") {
+    return emptySpecial(kind, "L", { lastDay: true });
+  }
+  if (dialect === "quartz" && kind === "dom") {
+    const nearest = /^(\d{1,2})W$/.exec(upper);
+    if (nearest) {
+      const day = Number(nearest[1]);
+      if (day < 1 || day > 31) {
+        return { ok: false, errorCode: "range", field: kind, min: 1, max: 31 };
+      }
+      return emptySpecial(kind, upper, { nearestWeekday: day });
+    }
+  }
+  if (dialect === "quartz" && kind === "dow") {
+    const last = /^([0-7]|SUN|MON|TUE|WED|THU|FRI|SAT)L$/.exec(upper);
+    if (last) {
+      const weekday = resolveToken("dow", last[1], "quartz");
+      if (weekday === null) return { ok: false, errorCode: "syntax", field: kind };
+      return emptySpecial(kind, upper, { lastDow: weekday });
+    }
+    const nth = /^([0-7]|SUN|MON|TUE|WED|THU|FRI|SAT)#([1-5])$/.exec(upper);
+    if (nth) {
+      const weekday = resolveToken("dow", nth[1], "quartz");
+      if (weekday === null) return { ok: false, errorCode: "syntax", field: kind };
+      return emptySpecial(kind, upper, {
+        nthDow: { weekday, n: Number(nth[2]) },
+      });
+    }
   }
   const { min, max } = FIELD_LIMITS[kind];
-  const top = kind === "dow" ? 6 : max;
+  const top =
+    kind === "dow" ? (dialect === "quartz" ? 6 : 6) : max;
   const items: FieldItem[] = [];
   for (const part of raw.split(",")) {
     const match = ITEM_RE.exec(part);
@@ -129,11 +226,11 @@ function parseField(kind: FieldKind, raw: string): ParsedField | CronError {
       items.push({ from: min, to: top, step, wildcard: true });
       continue;
     }
-    const from = resolveToken(kind, fromTok);
+    const from = resolveToken(kind, fromTok, dialect);
     if (from === null) return { ok: false, errorCode: "syntax", field: kind };
     let to = from;
     if (toTok !== undefined) {
-      const resolved = resolveToken(kind, toTok);
+      const resolved = resolveToken(kind, toTok, dialect);
       if (resolved === null) {
         return { ok: false, errorCode: "syntax", field: kind };
       }
@@ -141,15 +238,33 @@ function parseField(kind: FieldKind, raw: string): ParsedField | CronError {
     } else if (stepTok !== undefined) {
       to = top;
     }
-    if (from < min || from > max || to < min || to > max || from > to) {
-      return { ok: false, errorCode: "range", field: kind, min, max };
+    const fromCheck =
+      kind === "dow" && dialect === "quartz"
+        ? from
+        : from;
+    const rangeMin = kind === "dow" && dialect === "quartz" ? 0 : min;
+    const rangeMax = kind === "dow" && dialect === "quartz" ? 6 : max;
+    if (
+      fromCheck < rangeMin ||
+      fromCheck > rangeMax ||
+      to < rangeMin ||
+      to > rangeMax ||
+      from > to
+    ) {
+      return {
+        ok: false,
+        errorCode: "range",
+        field: kind,
+        min: dialect === "quartz" && kind === "dow" ? 1 : min,
+        max: dialect === "quartz" && kind === "dow" ? 7 : max,
+      };
     }
     items.push({ from, to, step, wildcard: false });
   }
   const set = new Set<number>();
   for (const item of items) {
     for (let v = item.from; v <= item.to; v += item.step) {
-      set.add(kind === "dow" && v === 7 ? 0 : v);
+      set.add(kind === "dow" && dialect === "classic" && v === 7 ? 0 : v);
     }
   }
   const values = [...set].sort((a, b) => a - b);
@@ -164,7 +279,26 @@ function parseField(kind: FieldKind, raw: string): ParsedField | CronError {
   };
 }
 
-export function parseCron(input: string): CronParseResult {
+export function fieldsForDialect(dialect: CronDialect): readonly FieldKind[] {
+  return dialect === "quartz" ? QUARTZ_FIELD_KINDS : FIELD_KINDS;
+}
+
+function anyYearField(): ParsedField {
+  return {
+    kind: "year",
+    raw: "*",
+    star: true,
+    any: true,
+    items: [{ from: 1970, to: 2099, step: 1, wildcard: true }],
+    values: Array.from({ length: 2099 - 1970 + 1 }, (_, i) => 1970 + i),
+  };
+}
+
+export function parseCron(
+  input: string,
+  options: ParseOptions = {},
+): CronParseResult {
+  const dialect = options.dialect ?? "classic";
   const text = input.trim().replace(/\s+/g, " ");
   if (!text) return { ok: false, errorCode: "empty" };
   let macro: string | undefined;
@@ -176,20 +310,78 @@ export function parseCron(input: string): CronParseResult {
     if (!expanded) return { ok: false, errorCode: "macro" };
     macro = key;
     parts = expanded.split(" ");
+    if (dialect === "quartz") parts = ["0", ...parts];
   } else {
     parts = text.split(" ");
   }
-  if (parts.length !== FIELD_KINDS.length) {
-    return { ok: false, errorCode: "fieldCount" };
+  if (dialect === "quartz" && parts.length === FIELD_KINDS.length) {
+    parts = ["0", ...parts];
+  }
+  let kinds: readonly FieldKind[];
+  if (dialect === "quartz") {
+    if (parts.length === QUARTZ_CORE_KINDS.length) {
+      kinds = QUARTZ_CORE_KINDS;
+    } else if (parts.length === QUARTZ_FIELD_KINDS.length) {
+      kinds = QUARTZ_FIELD_KINDS;
+    } else {
+      return { ok: false, errorCode: "fieldCount" };
+    }
+  } else {
+    kinds = FIELD_KINDS;
+    if (parts.length !== kinds.length) {
+      return { ok: false, errorCode: "fieldCount" };
+    }
   }
   const fields: ParsedField[] = [];
-  for (let i = 0; i < FIELD_KINDS.length; i++) {
-    const parsed = parseField(FIELD_KINDS[i], parts[i]);
+  for (let i = 0; i < kinds.length; i++) {
+    const parsed = parseField(kinds[i], parts[i], dialect);
     if ("ok" in parsed) return parsed;
     fields.push(parsed);
   }
-  const dayMode = !fields[2].star && !fields[4].star ? "or" : "and";
-  return { ok: true, expr: parts.join(" "), macro, fields, dayMode };
+  if (dialect === "quartz" && fields.length === QUARTZ_CORE_KINDS.length) {
+    fields.push(anyYearField());
+  }
+  const dom = fields[dialect === "quartz" ? 3 : 2];
+  const dow = fields[dialect === "quartz" ? 5 : 4];
+  if (dialect === "quartz") {
+    const domSet = !dom.unspecified && !dom.star;
+    const dowSet = !dow.unspecified && !dow.star;
+    if (domSet && dowSet) return { ok: false, errorCode: "quartzDay" };
+    return {
+      ok: true,
+      expr: parts.join(" "),
+      dialect,
+      macro,
+      fields,
+      dayMode: "and",
+    };
+  }
+  const dayMode = !dom.star && !dow.star ? "or" : "and";
+  return {
+    ok: true,
+    expr: parts.join(" "),
+    dialect,
+    macro,
+    fields,
+    dayMode,
+  };
+}
+
+export function cronParts(parsed: ParsedCron): {
+  second?: ParsedField;
+  minute: ParsedField;
+  hour: ParsedField;
+  dom: ParsedField;
+  month: ParsedField;
+  dow: ParsedField;
+  year?: ParsedField;
+} {
+  if (parsed.dialect === "quartz") {
+    const [second, minute, hour, dom, month, dow, year] = parsed.fields;
+    return { second, minute, hour, dom, month, dow, year };
+  }
+  const [minute, hour, dom, month, dow] = parsed.fields;
+  return { minute, hour, dom, month, dow };
 }
 
 export type NextRunsOptions = {
@@ -211,6 +403,7 @@ function wallFormatter(timeZone: string): Intl.DateTimeFormat {
       day: "numeric",
       hour: "numeric",
       minute: "numeric",
+      second: "numeric",
     });
     formatters.set(timeZone, fmt);
   }
@@ -228,11 +421,12 @@ function wallMs(ts: number, timeZone: string): number {
     parts.day,
     parts.hour % 24,
     parts.minute,
+    parts.second ?? 0,
   );
 }
 
 function offsetAt(ts: number, timeZone: string): number {
-  return wallMs(ts, timeZone) - Math.floor(ts / 60000) * 60000;
+  return wallMs(ts, timeZone) - Math.floor(ts / 1000) * 1000;
 }
 
 function wallToInstant(naive: number, timeZone: string): number | null {
@@ -246,44 +440,117 @@ function wallToInstant(naive: number, timeZone: string): number | null {
 }
 
 type MatchSets = {
+  second: Set<number>;
   minute: Set<number>;
   hour: Set<number>;
-  dom: Set<number>;
   month: Set<number>;
-  dow: Set<number>;
+  year: Set<number> | null;
   dayMode: "and" | "or";
-  domLastDay: boolean;
+  dom: ParsedField;
+  dow: ParsedField;
+  hasSeconds: boolean;
 };
 
 function daysInMonth(y: number, mo: number): number {
   return new Date(Date.UTC(y, mo, 0)).getUTCDate();
 }
 
-function matchSets(parsed: ParsedCron): MatchSets {
-  const [minute, hour, dom, month, dow] = parsed.fields.map(
-    (f) => new Set(f.values),
+function nearestWeekday(y: number, mo: number, day: number): number {
+  const dim = daysInMonth(y, mo);
+  const target = Math.min(Math.max(day, 1), dim);
+  const dow = new Date(Date.UTC(y, mo - 1, target)).getUTCDay();
+  if (dow === 0) {
+    if (target + 1 <= dim) return target + 1;
+    return target - 1;
+  }
+  if (dow === 6) {
+    if (target - 1 >= 1) return target - 1;
+    return target + 1;
+  }
+  return target;
+}
+
+function lastWeekdayOfMonth(y: number, mo: number, weekday: number): number {
+  const dim = daysInMonth(y, mo);
+  for (let d = dim; d >= 1; d--) {
+    if (new Date(Date.UTC(y, mo - 1, d)).getUTCDay() === weekday) return d;
+  }
+  return dim;
+}
+
+function nthWeekdayOfMonth(
+  y: number,
+  mo: number,
+  weekday: number,
+  n: number,
+): number | null {
+  let count = 0;
+  const dim = daysInMonth(y, mo);
+  for (let d = 1; d <= dim; d++) {
+    if (new Date(Date.UTC(y, mo - 1, d)).getUTCDay() === weekday) {
+      count += 1;
+      if (count === n) return d;
+    }
+  }
+  return null;
+}
+
+function onlyZeroSecond(field: ParsedField | undefined): boolean {
+  return Boolean(
+    field && field.values.length === 1 && field.values[0] === 0 && !field.star,
   );
+}
+
+function matchSets(parsed: ParsedCron): MatchSets {
+  const parts = cronParts(parsed);
+  const allSeconds = new Set(Array.from({ length: 60 }, (_, i) => i));
+  const year =
+    parts.year && !parts.year.any ? new Set(parts.year.values) : null;
   return {
-    minute,
-    hour,
-    dom,
-    month,
-    dow,
+    second: parts.second ? new Set(parts.second.values) : allSeconds,
+    minute: new Set(parts.minute.values),
+    hour: new Set(parts.hour.values),
+    month: new Set(parts.month.values),
+    year,
     dayMode: parsed.dayMode,
-    domLastDay: Boolean(parsed.fields[2].lastDay),
+    dom: parts.dom,
+    dow: parts.dow,
+    hasSeconds: Boolean(parts.second) && !onlyZeroSecond(parts.second),
   };
 }
 
+function domMatches(dom: ParsedField, y: number, mo: number, d: number): boolean {
+  if (dom.unspecified || dom.any) return true;
+  if (dom.lastDay) return d === daysInMonth(y, mo);
+  if (dom.nearestWeekday !== undefined) {
+    return d === nearestWeekday(y, mo, dom.nearestWeekday);
+  }
+  return dom.values.includes(d);
+}
+
+function dowMatches(dow: ParsedField, y: number, mo: number, d: number): boolean {
+  if (dow.unspecified || dow.any) return true;
+  const jsDow = new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
+  if (dow.lastDow !== undefined) {
+    return d === lastWeekdayOfMonth(y, mo, dow.lastDow);
+  }
+  if (dow.nthDow) {
+    return d === nthWeekdayOfMonth(y, mo, dow.nthDow.weekday, dow.nthDow.n);
+  }
+  return dow.values.includes(jsDow);
+}
+
 function dayMatches(sets: MatchSets, y: number, mo: number, d: number): boolean {
-  const domOk = sets.domLastDay
-    ? d === daysInMonth(y, mo)
-    : sets.dom.has(d);
-  const dowOk = sets.dow.has(new Date(Date.UTC(y, mo - 1, d)).getUTCDay());
+  const domOk = domMatches(sets.dom, y, mo, d);
+  const dowOk = dowMatches(sets.dow, y, mo, d);
   return sets.dayMode === "or" ? domOk || dowOk : domOk && dowOk;
 }
 
 function nextWall(sets: MatchSets, fromNaive: number): number | null {
-  const limitYear = new Date(fromNaive).getUTCFullYear() + 8;
+  const startYear = new Date(fromNaive).getUTCFullYear();
+  const limitYear = sets.year
+    ? Math.max(...sets.year.values()) + 1
+    : startYear + 8;
   let cur = fromNaive;
   for (;;) {
     const dt = new Date(cur);
@@ -293,7 +560,10 @@ function nextWall(sets: MatchSets, fromNaive: number): number | null {
     const d = dt.getUTCDate();
     const h = dt.getUTCHours();
     const mi = dt.getUTCMinutes();
-    if (!sets.month.has(mo)) {
+    const sec = dt.getUTCSeconds();
+    if (sets.year && !sets.year.has(y)) {
+      cur = Date.UTC(y + 1, 0, 1);
+    } else if (!sets.month.has(mo)) {
       cur = Date.UTC(y, mo, 1);
     } else if (!dayMatches(sets, y, mo, d)) {
       cur = Date.UTC(y, mo - 1, d + 1);
@@ -301,6 +571,8 @@ function nextWall(sets: MatchSets, fromNaive: number): number | null {
       cur = Date.UTC(y, mo - 1, d, h + 1);
     } else if (!sets.minute.has(mi)) {
       cur = Date.UTC(y, mo - 1, d, h, mi + 1);
+    } else if (sets.hasSeconds && !sets.second.has(sec)) {
+      cur = Date.UTC(y, mo - 1, d, h, mi, sec + 1);
     } else {
       return cur;
     }
@@ -322,20 +594,25 @@ export function isValidTimeZone(timeZone: string): boolean {
 
 export function nextRuns(
   expr: string | ParsedCron,
-  options: NextRunsOptions = {},
+  options: NextRunsOptions & ParseOptions = {},
 ): Date[] {
-  const parsed = typeof expr === "string" ? parseCron(expr) : expr;
+  const parsed =
+    typeof expr === "string"
+      ? parseCron(expr, { dialect: options.dialect })
+      : expr;
   if (!parsed.ok) return [];
   const timeZone = options.timeZone ?? browserTimeZone();
   const count = Math.min(Math.max(options.count ?? 10, 1), 100);
-  const startTs = Math.floor((options.from ?? new Date()).getTime() / 60000) * 60000 + 60000;
   const sets = matchSets(parsed);
+  const stepMs = sets.hasSeconds ? 1000 : 60000;
+  const from = options.from ?? new Date();
+  const startTs = Math.floor(from.getTime() / stepMs) * stepMs + stepMs;
   const runs: Date[] = [];
   let cursor = wallMs(startTs, timeZone);
   for (let guard = 0; guard < count * 8 && runs.length < count; guard++) {
     const naive = nextWall(sets, cursor);
     if (naive === null) break;
-    cursor = naive + 60000;
+    cursor = naive + stepMs;
     const instant = wallToInstant(naive, timeZone);
     if (instant === null || instant < startTs) continue;
     runs.push(new Date(instant));
@@ -352,13 +629,24 @@ export function runsBetween(
   from: Date,
   to: Date,
   timeZone: string,
+  options: ParseOptions = {},
 ): Date[] {
-  const parsed = typeof expr === "string" ? parseCron(expr) : expr;
+  const parsed =
+    typeof expr === "string" ? parseCron(expr, options) : expr;
   if (!parsed.ok) return [];
+  const stepMs =
+    parsed.dialect === "quartz" && !onlyZeroSecond(cronParts(parsed).second)
+      ? 1000
+      : 60000;
   const out: Date[] = [];
-  let cursor = new Date(from.getTime() - 60000);
+  let cursor = new Date(from.getTime() - stepMs);
   for (;;) {
-    const batch = nextRuns(parsed, { from: cursor, count: 100, timeZone });
+    const batch = nextRuns(parsed, {
+      from: cursor,
+      count: 100,
+      timeZone,
+      dialect: parsed.dialect,
+    });
     for (const run of batch) {
       if (run.getTime() >= to.getTime()) return out;
       out.push(run);
@@ -370,6 +658,9 @@ export function runsBetween(
 
 export type DescribeTemplates = {
   sep: string;
+  everySecond: string;
+  everyNSeconds: string;
+  atSecond: string;
   everyMinute: string;
   everyNMinutes: string;
   atMinute: string;
@@ -380,9 +671,14 @@ export type DescribeTemplates = {
   dom: string;
   domStep: string;
   domLast: string;
+  domNearest: string;
   month: string;
   dow: string;
+  dowLast: string;
+  dowNth: string;
+  year: string;
   orNote: string;
+  andNote: string;
 };
 
 export type DescribeNames = {
@@ -433,30 +729,61 @@ function describeTime(
   minute: ParsedField,
   hour: ParsedField,
   tpl: DescribeTemplates,
+  second?: ParsedField,
 ): DescribePart[] {
   const minuteStep = wildcardStep(minute);
   const hourStep = wildcardStep(hour);
+  const secondStep = second ? wildcardStep(second) : null;
   const plain = (n: number): string => String(n);
+  const includeSeconds =
+    Boolean(second) &&
+    !onlyZeroSecond(second) &&
+    !(second?.any && !secondStep);
   if (
     !minute.any &&
     !hour.any &&
     !minuteStep &&
     !hourStep &&
-    minute.values.length * hour.values.length <= 8
+    !(includeSeconds && secondStep) &&
+    minute.values.length *
+      hour.values.length *
+      (includeSeconds && second && !second.any ? second.values.length : 1) <=
+      8
   ) {
     const times: string[] = [];
     for (const h of hour.values) {
-      for (const m of minute.values) times.push(`${pad2(h)}:${pad2(m)}`);
+      for (const m of minute.values) {
+        if (includeSeconds && second && !second.any) {
+          for (const s of second.values) {
+            times.push(`${pad2(h)}:${pad2(m)}:${pad2(s)}`);
+          }
+        } else {
+          times.push(`${pad2(h)}:${pad2(m)}`);
+        }
+      }
     }
-    return [
-      {
-        fields: ["minute", "hour"],
-        text: fill(tpl.atTime, { list: times.join(tpl.sep) }),
-      },
-    ];
+    const fields: FieldKind[] = includeSeconds
+      ? ["second", "minute", "hour"]
+      : ["minute", "hour"];
+    return [{ fields, text: fill(tpl.atTime, { list: times.join(tpl.sep) }) }];
   }
-  if (minute.any && hour.any) {
-    return [{ fields: ["minute", "hour"], text: tpl.everyMinute }];
+  const parts: DescribePart[] = [];
+  if (includeSeconds && second) {
+    let secondPhrase: string;
+    if (second.any && !secondStep) {
+      secondPhrase = tpl.everySecond;
+    } else if (secondStep) {
+      secondPhrase = fill(tpl.everyNSeconds, { n: secondStep });
+    } else {
+      secondPhrase = fill(tpl.atSecond, {
+        list: formatRuns(second.values, plain, tpl.sep),
+      });
+    }
+    parts.push({ fields: ["second"], text: secondPhrase });
+  }
+  if (minute.any && hour.any && !includeSeconds) {
+    parts.push({ fields: ["minute", "hour"], text: tpl.everyMinute });
+    return parts;
   }
   let minutePhrase: string;
   if (minute.any) {
@@ -467,20 +794,30 @@ function describeTime(
     const list = formatRuns(minute.values, plain, tpl.sep);
     minutePhrase = fill(hour.any ? tpl.atMinuteEveryHour : tpl.atMinute, { list });
   }
-  const minutePart: DescribePart = { fields: ["minute"], text: minutePhrase };
-  if (hour.any) return [minutePart];
+  if (parts.length) parts.push({ fields: [], text: tpl.sep });
+  parts.push({ fields: ["minute"], text: minutePhrase });
+  if (hour.any) return parts;
   const hourPhrase = hourStep
     ? fill(tpl.everyNHours, { n: hourStep })
     : fill(tpl.duringHour, { list: formatRuns(hour.values, plain, tpl.sep) });
-  return [
-    minutePart,
+  parts.push(
     { fields: [], text: tpl.sep },
     { fields: ["hour"], text: hourPhrase },
-  ];
+  );
+  return parts;
 }
 
 function weekdayOrder(values: number[]): number[] {
   return values.map((v) => (v === 0 ? 7 : v)).sort((a, b) => a - b);
+}
+
+function classicDowToQuartz(n: number): number {
+  if (n === 0 || n === 7) return 1;
+  return n + 1;
+}
+
+function quartzDowNumbers(values: number[]): number[] {
+  return [...new Set(values.map(classicDowToQuartz))].sort((a, b) => a - b);
 }
 
 export function describeParts(
@@ -488,14 +825,16 @@ export function describeParts(
   tpl: DescribeTemplates,
   names: DescribeNames,
 ): DescribePart[] {
-  const [minute, hour, dom, month, dow] = parsed.fields;
-  const parts = describeTime(minute, hour, tpl);
+  const { second, minute, hour, dom, month, dow, year } = cronParts(parsed);
+  const parts = describeTime(minute, hour, tpl, second);
   const add = (field: FieldKind, text: string): void => {
     parts.push({ fields: [], text: tpl.sep }, { fields: [field], text });
   };
-  if (!dom.any) {
+  if (!dom.any && !dom.unspecified) {
     if (dom.lastDay) {
       add("dom", tpl.domLast);
+    } else if (dom.nearestWeekday !== undefined) {
+      add("dom", fill(tpl.domNearest, { n: dom.nearestWeekday }));
     } else {
       const step = wildcardStep(dom);
       add(
@@ -514,16 +853,48 @@ export function describeParts(
       fill(tpl.month, { list: formatRuns(month.values, names.month, tpl.sep) }),
     );
   }
-  if (!dow.any) {
+  if (!dow.any && !dow.unspecified) {
+    if (dow.lastDow !== undefined) {
+      add("dow", fill(tpl.dowLast, { day: names.weekday(dow.lastDow) }));
+    } else if (dow.nthDow) {
+      add(
+        "dow",
+        fill(tpl.dowNth, {
+          n: dow.nthDow.n,
+          day: names.weekday(dow.nthDow.weekday),
+        }),
+      );
+    } else {
+      add(
+        "dow",
+        fill(tpl.dow, {
+          list: formatRuns(
+            weekdayOrder(dow.values),
+            (n) => names.weekday(n % 7),
+            tpl.sep,
+          ),
+        }),
+      );
+    }
+  }
+  if (year && !year.any) {
     add(
-      "dow",
-      fill(tpl.dow, {
-        list: formatRuns(weekdayOrder(dow.values), (n) => names.weekday(n % 7), tpl.sep),
+      "year",
+      fill(tpl.year, {
+        list: formatRuns(year.values, (n) => String(n), tpl.sep),
       }),
     );
   }
   if (parsed.dayMode === "or" && !dom.any && !dow.any) {
     parts.push({ fields: [], text: `. ${tpl.orNote}` });
+  } else if (
+    parsed.dialect === "quartz" &&
+    !dom.unspecified &&
+    !dow.unspecified &&
+    !dom.star &&
+    !dow.star
+  ) {
+    parts.push({ fields: [], text: `. ${tpl.andNote}` });
   }
   return parts;
 }
@@ -591,8 +962,9 @@ export function toSystemdTimer(
 ): string {
   const parsed = typeof expr === "string" ? parseCron(expr) : expr;
   if (!parsed.ok) return "";
-  const [minute, hour, dom, month, dow] = parsed.fields;
-  const time = `${systemdNumbers(hour)}:${systemdNumbers(minute)}:00`;
+  const { second, minute, hour, dom, month, dow } = cronParts(parsed);
+  const sec = second && !onlyZeroSecond(second) ? systemdNumbers(second) : "00";
+  const time = `${systemdNumbers(hour)}:${systemdNumbers(minute)}:${sec}`;
   const monthPart = systemdNumbers(month);
   const domPart = dom.lastDay ? "~01" : systemdNumbers(dom);
   const dowPart = systemdWeekdays(dow);
@@ -644,9 +1016,19 @@ export function toSystemdService(
 }
 
 function k8sField(field: ParsedField): string {
+  if (field.unspecified) return "*";
   if (field.lastDay) return "L";
+  if (field.nearestWeekday !== undefined) return `${field.nearestWeekday}W`;
+  if (field.lastDow !== undefined) {
+    return `${field.lastDow === 0 ? 0 : field.lastDow}L`;
+  }
+  if (field.nthDow) {
+    return `${field.nthDow.weekday === 0 ? 0 : field.nthDow.weekday}#${field.nthDow.n}`;
+  }
   if (field.kind === "dow" && !field.star) {
-    const values = weekdayOrder(field.values).map((v) => v % 7).sort((a, b) => a - b);
+    const values = weekdayOrder(field.values)
+      .map((v) => v % 7)
+      .sort((a, b) => a - b);
     return formatRuns(values, (n) => String(n), ",").replaceAll("–", "-");
   }
   return field.items
@@ -661,14 +1043,16 @@ function k8sField(field: ParsedField): string {
 export function toStandardCron(expr: string | ParsedCron): string {
   const parsed = typeof expr === "string" ? parseCron(expr) : expr;
   if (!parsed.ok) return "";
-  return parsed.fields.map(k8sField).join(" ");
+  const { minute, hour, dom, month, dow } = cronParts(parsed);
+  return [minute, hour, dom, month, dow].map(k8sField).join(" ");
 }
 
 export function classicLastDayLines(expr: string | ParsedCron): string[] {
   const parsed = typeof expr === "string" ? parseCron(expr) : expr;
-  if (!parsed.ok || !parsed.fields[2].lastDay) return [];
-  const [minute, hour, , month, dow] = parsed.fields;
-  if (!month.any || !dow.any) return [];
+  if (!parsed.ok) return [];
+  const { minute, hour, dom, month, dow } = cronParts(parsed);
+  if (!dom.lastDay) return [];
+  if (!month.any || !(dow.any || dow.unspecified)) return [];
   const m = k8sField(minute);
   const h = k8sField(hour);
   return [
@@ -676,6 +1060,73 @@ export function classicLastDayLines(expr: string | ParsedCron): string[] {
     `${m} ${h} 30 4,6,9,11 *`,
     `${m} ${h} 28,29 2 *`,
   ];
+}
+
+function fieldRawForDialect(field: ParsedField, dialect: CronDialect): string {
+  if (field.unspecified) return dialect === "quartz" ? "?" : "*";
+  if (field.kind !== "dow" || field.lastDow !== undefined || field.nthDow) {
+    return field.raw;
+  }
+  if (dialect === "quartz" && !field.star && field.values.length) {
+    return formatRuns(quartzDowNumbers(field.values), (n) => String(n), ",").replaceAll(
+      "–",
+      "-",
+    );
+  }
+  if (dialect === "classic" && !field.star && field.values.length) {
+    return formatRuns(weekdayOrder(field.values), (n) => String(n % 7), ",").replaceAll(
+      "–",
+      "-",
+    );
+  }
+  return field.raw;
+}
+
+export function convertExprToDialect(
+  expr: string,
+  to: CronDialect,
+  from: CronDialect = to === "quartz" ? "classic" : "quartz",
+): string {
+  const text = expr.trim().replace(/\s+/g, " ");
+  if (!text || from === to) return text;
+  const parsed = parseCron(text, { dialect: from });
+  if (parsed.ok) {
+    const { minute, hour, dom, month, dow } = cronParts(parsed);
+    if (to === "quartz") {
+      let domRaw = fieldRawForDialect(dom, "quartz");
+      let dowRaw = fieldRawForDialect(dow, "quartz");
+      if (!dom.star && !dom.unspecified && !dow.star && !dow.unspecified) {
+        dowRaw = "?";
+      } else if (dom.star && dow.star) {
+        domRaw = "*";
+        dowRaw = "?";
+      } else if (!dom.star && dow.star) {
+        dowRaw = "?";
+      } else if (dom.star && !dow.star) {
+        domRaw = "?";
+      }
+      return ["0", minute.raw, hour.raw, domRaw, month.raw, dowRaw].join(" ");
+    }
+    return [
+      minute.raw,
+      hour.raw,
+      fieldRawForDialect(dom, "classic"),
+      month.raw,
+      fieldRawForDialect(dow, "classic"),
+    ].join(" ");
+  }
+  const tokens = text.split(" ");
+  if (to === "quartz" && tokens.length === 5 && !tokens[0].startsWith("@")) {
+    return ["0", ...tokens].join(" ");
+  }
+  if (to === "classic" && (tokens.length === 6 || tokens.length === 7)) {
+    return tokens.slice(1, 6).join(" ").replaceAll("?", "*");
+  }
+  if (to === "quartz" && text.startsWith("@")) {
+    const expanded = parseCron(text, { dialect: "quartz" });
+    return expanded.ok ? expanded.expr : text;
+  }
+  return text;
 }
 
 export function toK8sCronJob(
@@ -820,7 +1271,8 @@ export type WarningCode =
   | "everyMinute"
   | "dstRisk"
   | "lastDayL"
-  | "sundayAlias";
+  | "sundayAlias"
+  | "quartzExport";
 
 export type WarningSeverity = "warn" | "info";
 
@@ -841,6 +1293,7 @@ const WARNING_SEVERITY: Record<WarningCode, WarningSeverity> = {
   dstRisk: "info",
   lastDayL: "warn",
   sundayAlias: "info",
+  quartzExport: "info",
 };
 
 const MONTH_DAYS_MAX = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -924,14 +1377,22 @@ export function analyzeWarnings(
   timeZone: string,
   now: Date = new Date(),
 ): CronWarning[] {
-  const [minute, hour, dom, month, dow] = parsed.fields;
+  const { minute, hour, dom, month, dow } = cronParts(parsed);
   const codes: WarningCode[] = [];
 
   if (parsed.dayMode === "or") codes.push("domDowOr");
 
-  if (dom.lastDay) codes.push("lastDayL");
+  if (dom.lastDay && parsed.dialect === "classic") codes.push("lastDayL");
 
-  if (parsed.dayMode === "and" && !dom.any && !dom.lastDay) {
+  if (parsed.dialect === "quartz") codes.push("quartzExport");
+
+  if (
+    parsed.dayMode === "and" &&
+    !dom.any &&
+    !dom.unspecified &&
+    !dom.lastDay &&
+    dom.nearestWeekday === undefined
+  ) {
     const fits = (limits: number[]): boolean =>
       month.values.some((m) =>
         dom.values.some((d) => d <= limits[m - 1]),
@@ -949,13 +1410,16 @@ export function analyzeWarnings(
 
   if (parsed.fields.some(hasUnevenStep)) codes.push("unevenStep");
 
+  const domOpen = dom.any || Boolean(dom.unspecified);
+  const dowOpen = dow.any || Boolean(dow.unspecified);
+
   if (
     !minute.any &&
     !hour.any &&
     minute.values.includes(0) &&
     hour.values.includes(0) &&
-    dom.any &&
-    dow.any
+    domOpen &&
+    dowOpen
   ) {
     codes.push("midnightLoad");
   }
@@ -969,7 +1433,11 @@ export function analyzeWarnings(
 
   if (minute.any && hour.any) codes.push("everyMinute");
 
-  if (!dow.any && (dow.values.includes(0) || dow.values.includes(7))) {
+  if (
+    parsed.dialect === "classic" &&
+    !dow.any &&
+    (dow.values.includes(0) || dow.values.includes(7))
+  ) {
     codes.push("sundayAlias");
   }
 

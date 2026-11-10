@@ -2,9 +2,14 @@ import "./style.css";
 import {
   FIELD_KINDS,
   FIELD_LIMITS,
+  QUARTZ_CORE_KINDS,
+  QUARTZ_FIELD_KINDS,
   analyzeWarnings,
   browserTimeZone,
   classicLastDayLines,
+  convertExprToDialect,
+  cronParts,
+  fieldsForDialect,
   isValidTimeZone,
   nextRuns,
   parseCron,
@@ -18,6 +23,7 @@ import {
   toSystemdService,
   toSystemdTimer,
   zoneHourStart,
+  type CronDialect,
   type CronError,
   type CrontabLine,
   type FieldKind,
@@ -55,6 +61,7 @@ const COUNTS = [5, 10, 20];
 const HISTORY_KEY = "cronius:history";
 const SAVED_KEY = "cronius:saved";
 const CRONTAB_KEY = "cronius:crontab";
+const DIALECT_KEY = "cronius:dialect";
 const HISTORY_MAX = 12;
 const SAVED_MAX = 20;
 const HISTORY_DELAY_MS = 1500;
@@ -62,18 +69,21 @@ const BATCH_DELAY_MS = 200;
 const SHARE_TEXT_MAX = 600;
 const HOUR_MS = 3600000;
 const DAY_MS = 24 * HOUR_MS;
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.2.0";
+const DEFAULT_QUARTZ_EXPR = "0 0 9 ? * MON-FRI";
 
 type SavedItem = { name: string; expr: string };
 const STRIP_MAX_JOBS = 50;
 const STRIP_HOURS = 24;
 
 const FIELD_LABEL_KEY: Record<FieldKind, MessageKey> = {
+  second: "fieldSecond",
   minute: "fieldMinute",
   hour: "fieldHour",
   dom: "fieldDom",
   month: "fieldMonth",
   dow: "fieldDow",
+  year: "fieldYear",
 };
 
 const WARNING_KEY: Record<WarningCode, MessageKey> = {
@@ -87,19 +97,23 @@ const WARNING_KEY: Record<WarningCode, MessageKey> = {
   dstRisk: "warnDstRisk",
   lastDayL: "warnLastDayL",
   sundayAlias: "warnSundayAlias",
+  quartzExport: "warnQuartzExport",
 };
 
 const DEFAULT_STEP: Record<FieldKind, string> = {
+  second: "5",
   minute: "5",
   hour: "2",
   dom: "2",
   month: "2",
   dow: "2",
+  year: "1",
 };
 
 let locale: Locale = "ru";
 let rows: BuilderRow[] = [];
 let viewMode: ViewMode = "single";
+let dialect: CronDialect = "classic";
 let lastIcs = "";
 let historyTimer = 0;
 let batchTimer = 0;
@@ -179,6 +193,8 @@ function syncUrl(): void {
   const tz = byId<HTMLSelectElement>("tz").value;
   if (tz !== "browser") params.set("tz", tz);
   else params.delete("tz");
+  if (dialect === "quartz") params.set("dialect", "quartz");
+  else params.delete("dialect");
   if (viewMode === "crontab") {
     params.set("mode", "crontab");
     params.delete("expr");
@@ -191,7 +207,8 @@ function syncUrl(): void {
     params.delete("text");
     const exprInput = byId<HTMLInputElement>("expr");
     const expr = exprInput.value.trim();
-    if (expr && expr !== exprInput.defaultValue) params.set("expr", expr);
+    const fallback = dialect === "quartz" ? DEFAULT_QUARTZ_EXPR : DEFAULT_EXPR;
+    if (expr && expr !== fallback) params.set("expr", expr);
     else params.delete("expr");
     const count = currentCount();
     if (count !== DEFAULT_COUNT) params.set("n", String(count));
@@ -200,6 +217,50 @@ function syncUrl(): void {
   const qs = params.toString();
   const next = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
   window.history.replaceState(null, "", next);
+}
+
+function parseOpts(): { dialect: CronDialect } {
+  return { dialect };
+}
+
+function activeKinds(): readonly FieldKind[] {
+  return fieldsForDialect(dialect);
+}
+
+function activeRows(): BuilderRow[] {
+  return rows.filter((row) => activeKinds().includes(row.kind));
+}
+
+function setDialect(next: CronDialect, convertExpr: boolean): void {
+  if (next === dialect && !convertExpr) {
+    syncDialectUi();
+    return;
+  }
+  const prev = dialect;
+  const input = byId<HTMLInputElement>("expr");
+  if (convertExpr && prev !== next) {
+    input.value = convertExprToDialect(input.value, next, prev);
+  }
+  dialect = next;
+  window.localStorage.setItem(DIALECT_KEY, next);
+  syncDialectUi();
+  update(true, true);
+}
+
+function syncDialectUi(): void {
+  const quartz = dialect === "quartz";
+  for (const btn of document.querySelectorAll<HTMLButtonElement>(".dialect-btn")) {
+    const active = btn.dataset.dialect === dialect;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-pressed", String(active));
+  }
+  byId<HTMLElement>("builder").classList.toggle("is-quartz", quartz);
+  for (const kind of ["second", "year"] as const) {
+    const el = document.querySelector<HTMLElement>(`.cron-field[data-field="${kind}"]`);
+    if (el) el.hidden = !quartz;
+  }
+  const expr = byId<HTMLInputElement>("expr");
+  expr.placeholder = quartz ? "0 */15 * * * ?" : "*/15 * * * *";
 }
 
 function detectMode(raw: string): {
@@ -249,16 +310,30 @@ function rowToken(row: BuilderRow): string {
 
 function syncBuilder(): void {
   const raw = byId<HTMLInputElement>("expr").value;
-  const parsed = parseCron(raw);
+  const parsed = parseCron(raw, parseOpts());
   let tokens: string[] | null = null;
   if (parsed.ok) {
     tokens = parsed.expr.split(" ");
   } else {
     const parts = raw.trim().split(/\s+/);
-    if (parts.length === FIELD_KINDS.length && !parts[0].startsWith("@")) tokens = parts;
+    const kinds = activeKinds();
+    if (parts.length === kinds.length && !parts[0].startsWith("@")) tokens = parts;
   }
   if (!tokens) return;
-  tokens.forEach((token, i) => applyRow(rows[i], token));
+  const kinds =
+    dialect === "quartz"
+      ? tokens.length === 7
+        ? QUARTZ_FIELD_KINDS
+        : QUARTZ_CORE_KINDS
+      : FIELD_KINDS;
+  tokens.forEach((token, i) => {
+    const row = rows.find((item) => item.kind === kinds[i]);
+    if (row) applyRow(row, token);
+  });
+  if (dialect === "quartz" && tokens.length === 6) {
+    const yearRow = rows.find((item) => item.kind === "year");
+    if (yearRow) applyRow(yearRow, "*");
+  }
 }
 
 function hideRecipeTip(): void {
@@ -266,7 +341,15 @@ function hideRecipeTip(): void {
 }
 
 function onBuilderChange(): void {
-  byId<HTMLInputElement>("expr").value = rows.map(rowToken).join(" ");
+  const tokens = activeRows().map(rowToken);
+  if (
+    dialect === "quartz" &&
+    tokens.length === 7 &&
+    tokens[6] === "*"
+  ) {
+    tokens.pop();
+  }
+  byId<HTMLInputElement>("expr").value = tokens.join(" ");
   hideRecipeTip();
   update(false, true);
 }
@@ -289,7 +372,7 @@ function onModeChange(row: BuilderRow): void {
 function errorMessage(error: CronError): string {
   switch (error.errorCode) {
     case "fieldCount":
-      return t(locale, "errFieldCount");
+      return t(locale, dialect === "quartz" ? "errFieldCountQuartz" : "errFieldCount");
     case "syntax":
       return format(t(locale, "errSyntax"), {
         field: error.field ? t(locale, FIELD_LABEL_KEY[error.field]) : "",
@@ -304,6 +387,8 @@ function errorMessage(error: CronError): string {
       return t(locale, "errReboot");
     case "macro":
       return t(locale, "errMacro");
+    case "quartzDay":
+      return t(locale, "errQuartzDay");
     default:
       return "";
   }
@@ -328,8 +413,16 @@ function renderDescription(parsed: ParsedCron): void {
 function renderTokens(parsed: ParsedCron): void {
   const box = byId<HTMLElement>("expr-tokens");
   box.replaceChildren();
-  parsed.expr.split(" ").forEach((token, i) => {
-    const kind = FIELD_KINDS[i];
+  const tokens = parsed.expr.split(" ");
+  const kinds =
+    parsed.dialect === "quartz"
+      ? tokens.length === 7
+        ? QUARTZ_FIELD_KINDS
+        : QUARTZ_CORE_KINDS
+      : FIELD_KINDS;
+  tokens.forEach((token, i) => {
+    const kind = kinds[i];
+    if (!kind) return;
     const item = document.createElement("span");
     item.className = "tok";
     item.tabIndex = 0;
@@ -388,7 +481,8 @@ function renderWarnings(parsed: ParsedCron, zone: string): void {
 function renderFormAlerts(parsed: ParsedCron): void {
   const box = byId<HTMLElement>("form-alerts");
   box.replaceChildren();
-  if (!parsed.fields[2].lastDay) {
+  const { dom } = cronParts(parsed);
+  if (!dom.lastDay || parsed.dialect === "quartz") {
     box.hidden = true;
     return;
   }
@@ -447,6 +541,7 @@ function runFormatter(zone: string): Intl.DateTimeFormat {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    second: dialect === "quartz" ? "2-digit" : undefined,
     timeZone: zone,
     timeZoneName: "short",
   });
@@ -638,7 +733,7 @@ function renderSaved(): void {
 
 function saveCurrentExpr(): void {
   const expr = byId<HTMLInputElement>("expr").value.trim();
-  const parsed = parseCron(expr);
+  const parsed = parseCron(expr, parseOpts());
   if (!parsed.ok) return;
   const name =
     window.prompt(t(locale, "savedNamePrompt"), suggestSavedName(parsed.expr))?.trim() ||
@@ -659,7 +754,8 @@ function applyNaturalLanguage(): void {
     return;
   }
   error.hidden = true;
-  byId<HTMLInputElement>("expr").value = match.expr;
+  byId<HTMLInputElement>("expr").value =
+    dialect === "quartz" ? convertExprToDialect(match.expr, "quartz", "classic") : match.expr;
   hideRecipeTip();
   update(true, true);
 }
@@ -798,7 +894,7 @@ function rememberExpr(): void {
   window.clearTimeout(historyTimer);
   if (viewMode !== "single") return;
   const value = byId<HTMLInputElement>("expr").value.trim().replace(/\s+/g, " ");
-  if (!parseCron(value).ok) return;
+  if (!parseCron(value, parseOpts()).ok) return;
   writeHistory([value, ...readHistory().filter((item) => item !== value)].slice(0, HISTORY_MAX));
   renderHistory();
 }
@@ -823,7 +919,7 @@ function update(syncFromText: boolean, remember = false): void {
   const input = byId<HTMLInputElement>("expr");
   const errorEl = byId<HTMLElement>("expr-error");
   const results = byId<HTMLElement>("results");
-  const parsed = parseCron(input.value);
+  const parsed = parseCron(input.value, parseOpts());
   if (!parsed.ok) {
     results.hidden = true;
     byId<HTMLElement>("expr-tokens").hidden = true;
@@ -967,10 +1063,21 @@ function setZone(value: string): void {
   }
 }
 
+function loadDialectPreference(): CronDialect {
+  const params = new URLSearchParams(window.location.search);
+  const fromUrl = params.get("dialect");
+  if (fromUrl === "quartz" || fromUrl === "classic") return fromUrl;
+  const stored = window.localStorage.getItem(DIALECT_KEY);
+  return stored === "quartz" ? "quartz" : "classic";
+}
+
 function loadFromUrl(): ViewMode {
   const params = new URLSearchParams(window.location.search);
+  dialect = loadDialectPreference();
+  syncDialectUi();
   const exprInput = byId<HTMLInputElement>("expr");
-  exprInput.value = params.get("expr") ?? (exprInput.defaultValue || DEFAULT_EXPR);
+  const fallback = dialect === "quartz" ? DEFAULT_QUARTZ_EXPR : DEFAULT_EXPR;
+  exprInput.value = params.get("expr") ?? (exprInput.defaultValue || fallback);
   const text = params.get("text");
   byId<HTMLTextAreaElement>("crontab").value = text ?? "";
   if (!text) restoreCrontab();
@@ -981,7 +1088,7 @@ function loadFromUrl(): ViewMode {
 }
 
 function collectRows(): BuilderRow[] {
-  return FIELD_KINDS.map((kind) => {
+  return fieldsForDialect("quartz").map((kind) => {
     const root = document.querySelector<HTMLElement>(`.cron-field[data-field="${kind}"]`)!;
     return {
       kind,
@@ -1060,9 +1167,14 @@ function init(): void {
   });
   expr.addEventListener("change", rememberExpr);
 
+  const applyExampleExpr = (raw: string): void => {
+    expr.value =
+      dialect === "quartz" ? convertExprToDialect(raw, "quartz", "classic") : raw;
+  };
+
   for (const button of document.querySelectorAll<HTMLButtonElement>("#presets [data-expr]")) {
     button.addEventListener("click", () => {
-      expr.value = button.dataset.expr ?? "";
+      applyExampleExpr(button.dataset.expr ?? "");
       hideRecipeTip();
       update(true, true);
     });
@@ -1071,7 +1183,7 @@ function init(): void {
   const tip = byId<HTMLElement>("recipe-tip");
   for (const button of document.querySelectorAll<HTMLButtonElement>("#recipes [data-expr]")) {
     button.addEventListener("click", () => {
-      expr.value = button.dataset.expr ?? "";
+      applyExampleExpr(button.dataset.expr ?? "");
       update(true, true);
       tip.textContent = t(locale, button.dataset.tip as MessageKey);
       tip.hidden = false;
@@ -1144,14 +1256,21 @@ function init(): void {
 
   byId<HTMLButtonElement>("cal-prev").addEventListener("click", () => {
     calMonth -= 1;
-    const parsed = parseCron(byId<HTMLInputElement>("expr").value);
+    const parsed = parseCron(byId<HTMLInputElement>("expr").value, parseOpts());
     if (parsed.ok) renderCalendar(parsed, currentZone().zone);
   });
   byId<HTMLButtonElement>("cal-next").addEventListener("click", () => {
     calMonth += 1;
-    const parsed = parseCron(byId<HTMLInputElement>("expr").value);
+    const parsed = parseCron(byId<HTMLInputElement>("expr").value, parseOpts());
     if (parsed.ok) renderCalendar(parsed, currentZone().zone);
   });
+
+  for (const btn of document.querySelectorAll<HTMLButtonElement>(".dialect-btn")) {
+    btn.addEventListener("click", () => {
+      const next = btn.dataset.dialect === "quartz" ? "quartz" : "classic";
+      setDialect(next, true);
+    });
+  }
 
   byId<HTMLElement>("app-version").textContent = APP_VERSION;
 

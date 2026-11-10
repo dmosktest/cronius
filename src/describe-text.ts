@@ -16,6 +16,9 @@ export function intlTag(locale: Locale): string {
 function describeTemplates(locale: Locale): DescribeTemplates {
   return {
     sep: t(locale, "dSep"),
+    everySecond: t(locale, "dEverySecond"),
+    everyNSeconds: t(locale, "dEveryNSeconds"),
+    atSecond: t(locale, "dAtSecond"),
     everyMinute: t(locale, "dEveryMinute"),
     everyNMinutes: t(locale, "dEveryNMinutes"),
     atMinute: t(locale, "dAtMinute"),
@@ -26,9 +29,14 @@ function describeTemplates(locale: Locale): DescribeTemplates {
     dom: t(locale, "dDom"),
     domStep: t(locale, "dDomStep"),
     domLast: t(locale, "dDomLast"),
+    domNearest: t(locale, "dDomNearest"),
     month: t(locale, "dMonth"),
     dow: t(locale, "dDow"),
+    dowLast: t(locale, "dDowLast"),
+    dowNth: t(locale, "dDowNth"),
+    year: t(locale, "dYear"),
     orNote: t(locale, "dOrNote"),
+    andNote: t(locale, "dAndNote"),
   };
 }
 

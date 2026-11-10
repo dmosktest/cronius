@@ -108,9 +108,16 @@
 
       <div id="single-view" role="tabpanel" aria-labelledby="tab-single">
         <section class="panel main-panel" aria-labelledby="expr-title">
-          <h2 class="panel-title" id="expr-title">
-            <label for="expr" data-i18n="exprLabel">Cron-выражение</label>
-          </h2>
+          <div class="expr-head">
+            <h2 class="panel-title" id="expr-title">
+              <label for="expr" data-i18n="exprLabel">Cron-выражение</label>
+            </h2>
+            <div class="dialect" role="group" aria-labelledby="dialect-label">
+              <span class="dialect-label" id="dialect-label" data-i18n="dialectLabel">Диалект</span>
+              <button type="button" class="dialect-btn is-active" id="dialect-classic" data-dialect="classic" data-i18n="dialectClassic" aria-pressed="true">Classic</button>
+              <button type="button" class="dialect-btn" id="dialect-quartz" data-dialect="quartz" data-i18n="dialectQuartz" aria-pressed="false">Quartz</button>
+            </div>
+          </div>
           <input
             type="text"
             id="expr"
@@ -175,6 +182,27 @@
         <section class="panel convert-panel" aria-labelledby="builder-title">
           <h2 class="panel-title" id="builder-title" data-i18n="builderTitle">Конструктор полей</h2>
           <div class="builder" id="builder">
+            <div class="cron-field" data-field="second" hidden>
+              <span class="cron-field-name" data-i18n="fieldSecond">Секунда</span>
+              <select class="unit-select mode-select" aria-label="Секунда" data-i18n-aria="fieldSecond">
+                <option value="every" data-i18n="modeEvery">Каждый</option>
+                <option value="specific" data-i18n="modeSpecific">Значения</option>
+                <option value="range" data-i18n="modeRange">Диапазон</option>
+                <option value="step" data-i18n="modeStep">Шаг</option>
+              </select>
+              <div class="cron-field-inputs">
+                <input type="text" class="unit-input in-specific" autocomplete="off" spellcheck="false" placeholder="0,30" aria-label="Секунда" data-i18n-aria="fieldSecond" hidden />
+                <span class="in-range" hidden>
+                  <input type="number" class="unit-input in-from" min="0" max="59" aria-label="Секунда" data-i18n-aria="fieldSecond" />
+                  <span class="sep">–</span>
+                  <input type="number" class="unit-input in-to" min="0" max="59" aria-label="Секунда" data-i18n-aria="fieldSecond" />
+                </span>
+                <span class="in-step" hidden>
+                  <span class="sep">*/</span>
+                  <input type="number" class="unit-input in-n" min="1" max="59" aria-label="Секунда" data-i18n-aria="fieldSecond" />
+                </span>
+              </div>
+            </div>
             <div class="cron-field" data-field="minute">
               <span class="cron-field-name" data-i18n="fieldMinute">Минута</span>
               <select class="unit-select mode-select" aria-label="Минута" data-i18n-aria="fieldMinute">
@@ -277,6 +305,27 @@
                 <span class="in-step" hidden>
                   <span class="sep">*/</span>
                   <input type="number" class="unit-input in-n" min="1" max="7" aria-label="День недели" data-i18n-aria="fieldDow" />
+                </span>
+              </div>
+            </div>
+            <div class="cron-field" data-field="year" hidden>
+              <span class="cron-field-name" data-i18n="fieldYear">Год</span>
+              <select class="unit-select mode-select" aria-label="Год" data-i18n-aria="fieldYear">
+                <option value="every" data-i18n="modeEvery">Каждый</option>
+                <option value="specific" data-i18n="modeSpecific">Значения</option>
+                <option value="range" data-i18n="modeRange">Диапазон</option>
+                <option value="step" data-i18n="modeStep">Шаг</option>
+              </select>
+              <div class="cron-field-inputs">
+                <input type="text" class="unit-input in-specific" autocomplete="off" spellcheck="false" placeholder="2026,2027" aria-label="Год" data-i18n-aria="fieldYear" hidden />
+                <span class="in-range" hidden>
+                  <input type="number" class="unit-input in-from" min="1970" max="2099" aria-label="Год" data-i18n-aria="fieldYear" />
+                  <span class="sep">–</span>
+                  <input type="number" class="unit-input in-to" min="1970" max="2099" aria-label="Год" data-i18n-aria="fieldYear" />
+                </span>
+                <span class="in-step" hidden>
+                  <span class="sep">*/</span>
+                  <input type="number" class="unit-input in-n" min="1" max="129" aria-label="Год" data-i18n-aria="fieldYear" />
                 </span>
               </div>
             </div>
