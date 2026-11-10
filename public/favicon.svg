@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="cron">
+  <rect width="64" height="64" rx="12" fill="#17110c"/>
+  <text x="32" y="32" text-anchor="middle" font-family="Consolas, monospace" font-size="20" font-weight="700" fill="#f0852a">*/5</text>
+  <path stroke="#f0852a" stroke-width="2.2" stroke-linecap="round" d="M18 38h28"/>
+  <text x="32" y="54" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="13" font-weight="700" fill="#f6eee6">cron</text>
+</svg>

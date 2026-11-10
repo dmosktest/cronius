@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#17110c" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="cronius" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+    <title>cronius — конструктор и расшифровка cron-выражений</title>
+    <meta
+      name="description"
+      content="Собирайте и расшифровывайте cron из 5 полей: описание простым языком, ближайшие запуски в любом часовом поясе, сниппеты таймера systemd и Kubernetes CronJob. Работает в браузере."
+    />
+    <link rel="canonical" href="https://cronius.dmosk.net/ru/" />
+    <link rel="alternate" hreflang="ru" href="https://cronius.dmosk.net/ru/" />
+    <link rel="alternate" hreflang="en" href="https://cronius.dmosk.net/en/" />
+    <link rel="alternate" hreflang="x-default" href="https://cronius.dmosk.net/en/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://cronius.dmosk.net/ru/" />
+    <meta property="og:title" content="cronius — конструктор и расшифровка cron-выражений" />
+    <meta
+      property="og:description"
+      content="Собирайте и расшифровывайте cron из 5 полей: описание простым языком, ближайшие запуски в любом часовом поясе, сниппеты таймера systemd и Kubernetes CronJob. Работает в браузере."
+    />
+    <meta property="og:locale" content="ru_RU" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:image" content="https://cronius.dmosk.net/icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=optional"
+      rel="stylesheet"
+    />
+    <script type="application/ld+json" id="ld-app"></script>
+    <script type="application/ld+json" id="ld-faq"></script>
+  </head>
+  <body>
+    <main class="wrap">
+      <div class="topbar">
+        <p class="brand"><a href="https://dmosk.net/">dmosk</a> / cronius</p>
+        <div class="topbar-actions">
+          <a
+            class="github-link"
+            href="https://github.com/dmosktest/cronius"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="GitHub"
+            title="GitHub"
+          >
+            <svg class="github-icon" viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"
+              />
+            </svg>
+          </a>
+          <a
+            class="telegram-link"
+            href="https://t.me/dmosk"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Telegram"
+            title="Telegram"
+          >
+            <svg class="telegram-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"
+              />
+            </svg>
+          </a>
+          <details class="lang">
+            <summary class="lang-summary" aria-label="Язык сайта">
+              <img class="lang-flag" src="/flags/1f1f7-1f1fa.png" alt="" width="20" height="20" decoding="async" aria-hidden="true" />
+              <span class="lang-current-name">Русский</span>
+            </summary>
+            <div class="lang-menu" role="list">
+              <a href="/ru/" class="lang-option active" id="lang-ru" data-locale="ru" hreflang="ru" lang="ru" aria-current="page"><img class="lang-flag" src="/flags/1f1f7-1f1fa.png" alt="" width="20" height="20" decoding="async" aria-hidden="true" /><span class="lang-name">Русский</span></a>
+              <a href="/en/" class="lang-option" id="lang-en" data-locale="en" hreflang="en" lang="en" aria-current="false"><img class="lang-flag" src="/flags/1f1ec-1f1e7.png" alt="" width="20" height="20" decoding="async" aria-hidden="true" /><span class="lang-name">English</span></a>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <h1 id="heading">Конструктор и расшифровка cron-выражений</h1>
+      <p class="lead" id="lead">
+        Введите cron-выражение или соберите его в конструкторе полей.
+      </p>
+
+      <noscript>
+        <p class="noscript" data-i18n="noscript">
+          Включите JavaScript, чтобы собирать и расшифровывать cron-выражения.
+        </p>
+      </noscript>
+
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab is-active" id="tab-single" role="tab" aria-selected="true" aria-controls="single-view" data-i18n="tabSingle">Одно выражение</button>
+        <button type="button" class="tab" id="tab-crontab" role="tab" aria-selected="false" aria-controls="batch-view" data-i18n="tabCrontab">Crontab</button>
+      </div>
+
+      <div id="single-view" role="tabpanel" aria-labelledby="tab-single">
+        <section class="panel main-panel" aria-labelledby="expr-title">
+          <h2 class="panel-title" id="expr-title">
+            <label for="expr" data-i18n="exprLabel">Cron-выражение</label>
+          </h2>
+          <input
+            type="text"
+            id="expr"
+            class="unit-input expr-input"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="*/15 * * * *"
+          />
+          <p class="field-error" id="expr-error" role="alert" hidden></p>
+          <div class="form-alerts" id="form-alerts" hidden></div>
+          <div class="nl-row">
+            <label class="nl-label" for="nl">
+              <span data-i18n="nlLabel">Словами</span>
+            </label>
+            <input
+              type="text"
+              id="nl"
+              class="unit-input nl-input"
+              autocomplete="off"
+              spellcheck="true"
+              placeholder="по будням в 9:00"
+            />
+            <button type="button" class="btn btn-small" id="nl-apply" data-i18n="nlApply">Подставить</button>
+          </div>
+          <p class="field-error" id="nl-error" role="alert" hidden></p>
+          <div class="examples history" id="history" hidden>
+            <span class="examples-label" data-i18n="historyLabel">Недавние</span>
+            <span class="chips" id="history-chips"></span>
+            <button type="button" class="btn btn-small" id="history-clear" data-i18n="historyClear">Очистить</button>
+          </div>
+          <div class="examples saved" id="saved" hidden>
+            <span class="examples-label" data-i18n="savedLabel">Сохранённые</span>
+            <span class="chips" id="saved-chips"></span>
+            <button type="button" class="btn btn-small" id="saved-add" data-i18n="savedAdd">Сохранить</button>
+            <button type="button" class="btn btn-small" id="saved-clear" data-i18n="savedClear">Очистить</button>
+          </div>
+          <div class="examples" id="presets">
+            <span class="examples-label" data-i18n="presetsLabel">Примеры</span>
+            <button type="button" class="btn btn-small example-btn" data-expr="* * * * *" data-i18n="presetEveryMinute">Каждую минуту</button>
+            <button type="button" class="btn btn-small example-btn" data-expr="0 * * * *" data-i18n="presetHourly">Каждый час</button>
+            <button type="button" class="btn btn-small example-btn" data-expr="0 0 * * *" data-i18n="presetDaily">Ежедневно в полночь</button>
+            <button type="button" class="btn btn-small example-btn" data-expr="0 9 * * 1-5" data-i18n="presetWeekdays">По будням в 9:00</button>
+            <button type="button" class="btn btn-small example-btn" data-expr="0 0 * * 0" data-i18n="presetSunday">Каждое воскресенье</button>
+            <button type="button" class="btn btn-small example-btn" data-expr="0 0 1 * *" data-i18n="presetMonthly">1-го числа каждого месяца</button>
+            <button type="button" class="btn btn-small example-btn" data-expr="0 0 L * *" data-i18n="presetLastDay">Последний день каждого месяца</button>
+            <button type="button" class="btn btn-small example-btn" data-expr="0 0 1 1 *" data-i18n="presetYearly">1 января каждый год</button>
+          </div>
+          <div class="examples" id="recipes">
+            <span class="examples-label" data-i18n="recipesLabel">Рецепты</span>
+            <button type="button" class="btn btn-small example-btn" data-expr="30 2 * * *" data-tip="recipeBackupTip" data-i18n="recipeBackup">Ночной бэкап</button>
+            <button type="button" class="btn btn-small example-btn" data-expr="0 3 * * *" data-tip="recipeCertbotTip" data-i18n="recipeCertbot">Обновление certbot</button>
+            <button type="button" class="btn btn-small example-btn" data-expr="0 4 * * 0" data-tip="recipeLogrotateTip" data-i18n="recipeLogrotate">Недельный logrotate</button>
+            <button type="button" class="btn btn-small example-btn" data-expr="*/5 * * * *" data-tip="recipeHealthTip" data-i18n="recipeHealth">Проверка каждые 5 минут</button>
+            <button type="button" class="btn btn-small example-btn" data-expr="0 9 * * 1-5" data-tip="recipeReportTip" data-i18n="recipeReport">Утренний отчёт по будням</button>
+            <button type="button" class="btn btn-small example-btn" data-expr="0 0 * * 0" data-tip="recipeSundayTip" data-i18n="recipeSunday">Воскресенье: 0 ≡ 7</button>
+          </div>
+          <p class="tip recipe-tip" id="recipe-tip" role="status" hidden></p>
+          <div class="tokens" id="expr-tokens" hidden></div>
+        </section>
+
+        <section class="panel convert-panel" aria-labelledby="builder-title">
+          <h2 class="panel-title" id="builder-title" data-i18n="builderTitle">Конструктор полей</h2>
+          <div class="builder" id="builder">
+            <div class="cron-field" data-field="minute">
+              <span class="cron-field-name" data-i18n="fieldMinute">Минута</span>
+              <select class="unit-select mode-select" aria-label="Минута" data-i18n-aria="fieldMinute">
+                <option value="every" data-i18n="modeEvery">Каждый</option>
+                <option value="specific" data-i18n="modeSpecific">Значения</option>
+                <option value="range" data-i18n="modeRange">Диапазон</option>
+                <option value="step" data-i18n="modeStep">Шаг</option>
+              </select>
+              <div class="cron-field-inputs">
+                <input type="text" class="unit-input in-specific" autocomplete="off" spellcheck="false" placeholder="0,30" aria-label="Минута" data-i18n-aria="fieldMinute" hidden />
+                <span class="in-range" hidden>
+                  <input type="number" class="unit-input in-from" min="0" max="59" aria-label="Минута" data-i18n-aria="fieldMinute" />
+                  <span class="sep">–</span>
+                  <input type="number" class="unit-input in-to" min="0" max="59" aria-label="Минута" data-i18n-aria="fieldMinute" />
+                </span>
+                <span class="in-step" hidden>
+                  <span class="sep">*/</span>
+                  <input type="number" class="unit-input in-n" min="1" max="59" aria-label="Минута" data-i18n-aria="fieldMinute" />
+                </span>
+              </div>
+            </div>
+            <div class="cron-field" data-field="hour">
+              <span class="cron-field-name" data-i18n="fieldHour">Час</span>
+              <select class="unit-select mode-select" aria-label="Час" data-i18n-aria="fieldHour">
+                <option value="every" data-i18n="modeEvery">Каждый</option>
+                <option value="specific" data-i18n="modeSpecific">Значения</option>
+                <option value="range" data-i18n="modeRange">Диапазон</option>
+                <option value="step" data-i18n="modeStep">Шаг</option>
+              </select>
+              <div class="cron-field-inputs">
+                <input type="text" class="unit-input in-specific" autocomplete="off" spellcheck="false" placeholder="9,17" aria-label="Час" data-i18n-aria="fieldHour" hidden />
+                <span class="in-range" hidden>
+                  <input type="number" class="unit-input in-from" min="0" max="23" aria-label="Час" data-i18n-aria="fieldHour" />
+                  <span class="sep">–</span>
+                  <input type="number" class="unit-input in-to" min="0" max="23" aria-label="Час" data-i18n-aria="fieldHour" />
+                </span>
+                <span class="in-step" hidden>
+                  <span class="sep">*/</span>
+                  <input type="number" class="unit-input in-n" min="1" max="23" aria-label="Час" data-i18n-aria="fieldHour" />
+                </span>
+              </div>
+            </div>
+            <div class="cron-field" data-field="dom">
+              <span class="cron-field-name" data-i18n="fieldDom">День месяца</span>
+              <select class="unit-select mode-select" aria-label="День месяца" data-i18n-aria="fieldDom">
+                <option value="every" data-i18n="modeEvery">Каждый</option>
+                <option value="specific" data-i18n="modeSpecific">Значения</option>
+                <option value="range" data-i18n="modeRange">Диапазон</option>
+                <option value="step" data-i18n="modeStep">Шаг</option>
+              </select>
+              <div class="cron-field-inputs">
+                <input type="text" class="unit-input in-specific" autocomplete="off" spellcheck="false" placeholder="1,15" aria-label="День месяца" data-i18n-aria="fieldDom" hidden />
+                <span class="in-range" hidden>
+                  <input type="number" class="unit-input in-from" min="1" max="31" aria-label="День месяца" data-i18n-aria="fieldDom" />
+                  <span class="sep">–</span>
+                  <input type="number" class="unit-input in-to" min="1" max="31" aria-label="День месяца" data-i18n-aria="fieldDom" />
+                </span>
+                <span class="in-step" hidden>
+                  <span class="sep">*/</span>
+                  <input type="number" class="unit-input in-n" min="1" max="31" aria-label="День месяца" data-i18n-aria="fieldDom" />
+                </span>
+              </div>
+            </div>
+            <div class="cron-field" data-field="month">
+              <span class="cron-field-name" data-i18n="fieldMonth">Месяц</span>
+              <select class="unit-select mode-select" aria-label="Месяц" data-i18n-aria="fieldMonth">
+                <option value="every" data-i18n="modeEvery">Каждый</option>
+                <option value="specific" data-i18n="modeSpecific">Значения</option>
+                <option value="range" data-i18n="modeRange">Диапазон</option>
+                <option value="step" data-i18n="modeStep">Шаг</option>
+              </select>
+              <div class="cron-field-inputs">
+                <input type="text" class="unit-input in-specific" autocomplete="off" spellcheck="false" placeholder="1,6,JAN" aria-label="Месяц" data-i18n-aria="fieldMonth" hidden />
+                <span class="in-range" hidden>
+                  <input type="number" class="unit-input in-from" min="1" max="12" aria-label="Месяц" data-i18n-aria="fieldMonth" />
+                  <span class="sep">–</span>
+                  <input type="number" class="unit-input in-to" min="1" max="12" aria-label="Месяц" data-i18n-aria="fieldMonth" />
+                </span>
+                <span class="in-step" hidden>
+                  <span class="sep">*/</span>
+                  <input type="number" class="unit-input in-n" min="1" max="12" aria-label="Месяц" data-i18n-aria="fieldMonth" />
+                </span>
+              </div>
+            </div>
+            <div class="cron-field" data-field="dow">
+              <span class="cron-field-name" data-i18n="fieldDow">День недели</span>
+              <select class="unit-select mode-select" aria-label="День недели" data-i18n-aria="fieldDow">
+                <option value="every" data-i18n="modeEvery">Каждый</option>
+                <option value="specific" data-i18n="modeSpecific">Значения</option>
+                <option value="range" data-i18n="modeRange">Диапазон</option>
+                <option value="step" data-i18n="modeStep">Шаг</option>
+              </select>
+              <div class="cron-field-inputs">
+                <input type="text" class="unit-input in-specific" autocomplete="off" spellcheck="false" placeholder="1,3,FRI" aria-label="День недели" data-i18n-aria="fieldDow" hidden />
+                <span class="in-range" hidden>
+                  <input type="number" class="unit-input in-from" min="0" max="7" aria-label="День недели" data-i18n-aria="fieldDow" />
+                  <span class="sep">–</span>
+                  <input type="number" class="unit-input in-to" min="0" max="7" aria-label="День недели" data-i18n-aria="fieldDow" />
+                </span>
+                <span class="in-step" hidden>
+                  <span class="sep">*/</span>
+                  <input type="number" class="unit-input in-n" min="1" max="7" aria-label="День недели" data-i18n-aria="fieldDow" />
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div id="batch-view" role="tabpanel" aria-labelledby="tab-crontab" hidden>
+        <section class="panel main-panel" aria-labelledby="crontab-title">
+          <h2 class="panel-title" id="crontab-title">
+            <label for="crontab" data-i18n="crontabLabel">Текст crontab</label>
+          </h2>
+          <textarea
+            id="crontab"
+            class="unit-input crontab-input"
+            rows="8"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+            placeholder="# backup&#10;CRON_TZ=Europe/Berlin&#10;30 2 * * * /usr/local/bin/backup.sh&#10;*/5 * * * * /opt/health-check.sh&#10;@daily /usr/bin/logrotate /etc/logrotate.conf"
+          ></textarea>
+          <p class="muted" data-i18n="crontabHint">Вставьте строки crontab.</p>
+          <p class="muted" data-i18n="crontabTzHint">CRON_TZ и TZ задают часовой пояс для строк ниже.</p>
+        </section>
+      </div>
+
+      <div class="toolbar">
+        <label class="setting">
+          <span data-i18n="tzLabel">Часовой пояс</span>
+          <select id="tz" class="unit-select">
+            <option value="browser" data-i18n="tzBrowser">Локальное время браузера</option>
+            <option value="UTC" data-i18n="tzUtc">UTC</option>
+            <option value="Europe/Moscow">Europe/Moscow</option>
+            <option value="Europe/London">Europe/London</option>
+            <option value="Europe/Berlin">Europe/Berlin</option>
+            <option value="America/New_York">America/New_York</option>
+            <option value="America/Chicago">America/Chicago</option>
+            <option value="America/Los_Angeles">America/Los_Angeles</option>
+            <option value="Asia/Dubai">Asia/Dubai</option>
+            <option value="Asia/Kolkata">Asia/Kolkata</option>
+            <option value="Asia/Shanghai">Asia/Shanghai</option>
+            <option value="Asia/Tokyo">Asia/Tokyo</option>
+            <option value="Australia/Sydney">Australia/Sydney</option>
+          </select>
+        </label>
+        <label class="setting" id="count-setting">
+          <span data-i18n="countLabel">Запусков</span>
+          <select id="count" class="unit-select unit-select-narrow">
+            <option value="5">5</option>
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+          </select>
+        </label>
+        <button type="button" class="btn" id="share" data-i18n="share">Ссылка</button>
+        <p class="status" id="status" role="status" aria-live="polite"></p>
+      </div>
+
+      <div class="results" id="results" hidden>
+        <section class="panel convert-panel" aria-labelledby="description-title">
+          <h2 class="panel-title" id="description-title" data-i18n="descriptionTitle">Что это значит</h2>
+          <p class="description" id="description"></p>
+          <ul class="warnings" id="warnings" hidden></ul>
+        </section>
+
+        <section class="panel convert-panel" aria-labelledby="runs-title">
+          <h2 class="panel-title" id="runs-title" data-i18n="nextRunsTitle">Ближайшие запуски</h2>
+          <div class="timeline" id="timeline" hidden>
+            <p class="timeline-label" id="timeline-label"></p>
+            <div class="tl-track" id="tl-track"></div>
+            <div class="tl-axis" id="tl-axis"></div>
+          </div>
+          <div class="cal-heat" id="cal-heat" hidden>
+            <div class="cal-head">
+              <button type="button" class="btn btn-small" id="cal-prev" data-i18n="calPrev">←</button>
+              <h3 class="cal-title" id="cal-title" data-i18n="calTitle">Календарь запусков</h3>
+              <button type="button" class="btn btn-small" id="cal-next" data-i18n="calNext">→</button>
+            </div>
+            <div class="cal-grid" id="cal-grid" role="grid"></div>
+          </div>
+          <p class="muted" id="no-runs" data-i18n="noRuns" hidden>В ближайшие годы запусков не найдено.</p>
+          <div class="table-wrap" id="runs-wrap">
+            <table class="runs">
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col" data-i18n="colWhen">Дата и время</th>
+                  <th scope="col">UTC</th>
+                </tr>
+              </thead>
+              <tbody id="runs-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <section class="panel convert-panel" id="batch-results" aria-labelledby="batch-title" hidden>
+        <h2 class="panel-title" id="batch-title" data-i18n="nextRunsTitle">Ближайшие запуски</h2>
+        <p class="muted" id="batch-summary" hidden></p>
+        <p class="muted" id="batch-empty" data-i18n="batchEmpty" hidden>Строк с расписанием не найдено.</p>
+        <div class="table-wrap" id="batch-wrap" hidden>
+          <table class="runs batch">
+            <thead>
+              <tr>
+                <th scope="col" data-i18n="batchColLine">Строка</th>
+                <th scope="col" data-i18n="batchColExpr">Выражение</th>
+                <th scope="col" data-i18n="batchColMeaning">Что значит</th>
+                <th scope="col" data-i18n="batchColNext">Следующий запуск</th>
+              </tr>
+            </thead>
+            <tbody id="batch-body"></tbody>
+          </table>
+        </div>
+        <div class="overlap" id="overlap" hidden>
+          <h3 class="export-title" data-i18n="overlapTitle">Пересечения в ближайшие 24 часа</h3>
+          <p class="muted" id="overlap-note"></p>
+          <div class="strip" id="strip"></div>
+        </div>
+      </section>
+
+      <section class="panel convert-panel" id="export-panel" aria-labelledby="export-title" hidden>
+        <h2 class="panel-title" id="export-title" data-i18n="exportTitle">Экспорт</h2>
+        <div class="export-block">
+          <h3 class="export-title" data-i18n="systemdTitle">Таймер systemd</h3>
+          <pre class="yaml-snippet" id="systemd-out"></pre>
+          <div class="export-actions">
+            <button type="button" class="btn btn-small" id="copy-systemd" data-i18n="copy">Копировать</button>
+            <span class="row-status" id="copy-systemd-status" aria-live="polite"></span>
+          </div>
+        </div>
+        <div class="export-block">
+          <h3 class="export-title" data-i18n="systemdServiceTitle">Сервис systemd</h3>
+          <pre class="yaml-snippet" id="service-out"></pre>
+          <div class="export-actions">
+            <button type="button" class="btn btn-small" id="copy-service" data-i18n="copy">Копировать</button>
+            <span class="row-status" id="copy-service-status" aria-live="polite"></span>
+          </div>
+        </div>
+        <div class="export-block">
+          <h3 class="export-title" data-i18n="k8sTitle">Kubernetes CronJob</h3>
+          <pre class="yaml-snippet" id="k8s-out"></pre>
+          <div class="export-actions">
+            <button type="button" class="btn btn-small" id="copy-k8s" data-i18n="copy">Копировать</button>
+            <span class="row-status" id="copy-k8s-status" aria-live="polite"></span>
+          </div>
+        </div>
+        <div class="export-block">
+          <h3 class="export-title" data-i18n="githubTitle">GitHub Actions</h3>
+          <pre class="yaml-snippet" id="github-out"></pre>
+          <div class="export-actions">
+            <button type="button" class="btn btn-small" id="copy-github" data-i18n="copy">Копировать</button>
+            <span class="row-status" id="copy-github-status" aria-live="polite"></span>
+          </div>
+        </div>
+        <div class="export-block">
+          <h3 class="export-title" data-i18n="gitlabTitle">GitLab CI</h3>
+          <pre class="yaml-snippet" id="gitlab-out"></pre>
+          <div class="export-actions">
+            <button type="button" class="btn btn-small" id="copy-gitlab" data-i18n="copy">Копировать</button>
+            <span class="row-status" id="copy-gitlab-status" aria-live="polite"></span>
+          </div>
+        </div>
+        <div class="export-block" id="ics-block">
+          <h3 class="export-title" data-i18n="icsTitle">Календарь (ICS)</h3>
+          <pre class="yaml-snippet is-scroll" id="ics-out"></pre>
+          <div class="export-actions">
+            <button type="button" class="btn btn-small" id="copy-ics" data-i18n="copy">Копировать</button>
+            <button type="button" class="btn btn-small" id="download-ics" data-i18n="download">Скачать</button>
+            <span class="row-status" id="copy-ics-status" aria-live="polite"></span>
+          </div>
+        </div>
+        <p class="tip"><strong class="tip-title" data-i18n="noteTitle">Не везде одинаково</strong> <span data-i18n-html="noteHtml"></span></p>
+        <div class="compat-block">
+          <h3 class="export-title" data-i18n="compatTitle">Совместимость</h3>
+          <div class="compat-html" data-i18n-html="compatHtml"></div>
+        </div>
+        <div class="compat-block">
+          <h3 class="export-title" data-i18n="migrateTitle">Миграция cron → Kubernetes</h3>
+          <div class="compat-html" data-i18n-html="migrateHtml"></div>
+        </div>
+      </section>
+
+      <article class="seo" id="seo-root">
+        <section class="seo-block" aria-labelledby="seo-benefits">
+          <h2 id="seo-benefits">Преимущества</h2>
+          <ul></ul>
+        </section>
+        <section class="seo-block" aria-labelledby="seo-how">
+          <h2 id="seo-how">Как пользоваться</h2>
+          <ol></ol>
+        </section>
+        <section class="seo-block" aria-labelledby="seo-strong">
+          <h2 id="seo-strong">Подсказки по cron</h2>
+          <p></p>
+          <p class="seo-label"></p>
+          <ul></ul>
+        </section>
+        <section class="seo-block" aria-labelledby="seo-uses">
+          <h2 id="seo-uses">Для чего нужен сервис</h2>
+          <ul></ul>
+        </section>
+        <section class="seo-block" aria-labelledby="seo-faq">
+          <h2 id="seo-faq">Частые вопросы</h2>
+          <div class="faq-list"></div>
+        </section>
+      </article>
+      <nav class="phrase-nav" id="phrase-nav" aria-labelledby="phrase-nav-title"></nav>
+
+      <footer class="site-foot">
+        <p>
+          <span data-i18n="footVersion">cronius</span>
+          <span id="app-version"></span>
+          ·
+          <a href="https://github.com/dmosktest/cronius/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" data-i18n="footLicense">MIT</a>
+          ·
+          <span data-i18n="footLocales">23 языка</span>
+          ·
+          <a href="https://github.com/dmosktest/cronius" target="_blank" rel="noopener noreferrer" data-i18n="footSource">Исходники</a>
+          ·
+          <a href="https://t.me/dmosk" target="_blank" rel="noopener noreferrer">Telegram</a>
+        </p>
+      </footer>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
